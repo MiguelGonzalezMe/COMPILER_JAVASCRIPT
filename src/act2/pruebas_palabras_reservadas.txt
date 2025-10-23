@@ -1,0 +1,78 @@
+// Variable declarations
+let x = 10;
+const y = 20.5;
+var z = x + y;
+
+// Strings
+let greeting = "Hello, world!";
+let char = 'a';
+
+// Booleans
+let isReady = true;
+let isDone = false;
+
+// Null and Undefined
+let a = null;
+let b = undefined;
+
+// BigInt
+let big = 12345678901234567890n;
+
+#
+// Symbols
+let sym = Symbol("id");
+
+// Control structures
+if (x > y) {
+    console.log("x is greater");
+} else {
+    console.log("y is greater");
+}
+
+while (z < 100) {
+    z = z + 1;
+}
+
+// Function
+function add(a, b) {
+    return a + b;
+}
+
+// Class
+class Animal {
+    constructor(name) {
+        this.name = name;
+    }
+    speak() {
+        console.log(this.name + " makes a noise.");
+    }
+}
+
+// Objects and Arrays
+let obj = {
+    key1: "value1",
+    key2: 123,
+    nested: {
+        innerKey: true
+    }
+};
+
+let arr = [1, 2, 3, "four", false];
+
+// Try-Catch
+try {
+    throw new Error("Something went wrong!");
+} catch (e) {
+    console.log(e);
+} finally {
+    console.log("Done");
+}
+
+// Comments
+// This is a single-line comment
+
+/*
+This is a multi-line comment
+spanning multiple lines
+*/
+

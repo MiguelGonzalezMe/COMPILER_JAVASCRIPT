@@ -1,0 +1,10 @@
+# Archivos y carpetas de NetBeans
+nbproject/private/
+build/
+dist/
+build.xml
+manifest.mf
+
+# Archivos del sistema
+*.class
+*.log

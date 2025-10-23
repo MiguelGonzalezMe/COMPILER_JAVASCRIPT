@@ -1,0 +1,470 @@
+
+/*
+    FREGOZO ARÉCHIGA JAASIEL
+    HERRERA CASTILLO KENIA GUADALUPE
+    GONZALEZ MENDOZA MIGUEL ÁNGEL
+    JAVASCRIPT PARSER (CUP COMPATIBLE)
+*/
+
+package act4;
+import java_cup.runtime.*;
+import java.io.*;
+
+
+parser code{:
+    public void syntax_error(Symbol s){
+    //report_error("ERROR de sintaxis", s);
+    }
+    
+    
+    public void report_error(String message, Object info) {
+    //System.err.println(message);
+}
+
+:}
+
+
+action code {:
+    private int openParenCount = 0;
+    private int closeParenCount = 0;
+    
+    public void checkParenthesesBalance() {
+        if (openParenCount != closeParenCount) {
+            System.err.println("ERROR: Paréntesis desbalanceados - " + 
+                             openParenCount + " abiertos, " + 
+                             closeParenCount + " cerrados");
+        }
+    }
+    
+    public void incrementOpenParen() { openParenCount++; }
+    public void incrementCloseParen() { closeParenCount++; }
+    
+    public void report_error(String message, Object info) {
+        System.err.println("Error: " + message + " " + info);
+    }
+    
+    public void report_error(String message, Object info, int line, int column) {
+    System.err.println("ERROR en linea " + line + ", columna " + column + ": " + message);
+}
+
+
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+        throw new RuntimeException(message);
+    }
+
+    public void report_fatal_error(String message, Object info, int line, int column) {
+        report_error(message, info, line, column);
+        throw new RuntimeException(message + " en línea " + line + ", columna " + column);
+    }
+
+    public void warn_const_not_initialized(String identifier) {
+        System.err.println("WARNING: const variable '" + identifier + "' is declared but not initialized.");
+    }
+:}
+
+scan with{:
+    return getScanner().next_token();
+:}
+
+/* ===========================
+   TERMINAL SYMBOLS
+   =========================== */
+
+// Keywords
+terminal SYMBOL, IF, ELSE, WHILE, FOR, FUNCTION, RETURN, LET, CONST, NEW;
+terminal THIS, CLASS, EXTENDS, SUPER, IMPORT, EXPORT, DEFAULT, TRY, CATCH, FINALLY;
+terminal THROW, TYPEOF, INSTANCEOF, DELETE, IN, VOID, VAR;
+
+// Literals
+terminal NUMBER, STRING_LITERAL, BOOLEAN_LITERAL, NULL_LITERAL, BIGINT;
+
+// Operators
+terminal STRICT_EQ, STRICT_NE, EQ, NE, LE, GE, LT, GT, AND, OR, NOT;
+terminal PLUS, MINUS, MULT, DIV, ASSIGN;
+
+// Delimiters
+terminal LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET;
+terminal SEMICOLON, COMMA, DOT, QUESTION, COLON;
+
+// Identifiers and errors
+terminal IDENTIFIER;
+terminal COMMENT_LINE, COMMENT_BLOCK;
+terminal ERROR;
+
+/* ===========================
+   NON-TERMINAL SYMBOLS
+   =========================== */
+
+non terminal program;
+non terminal stmt_list;
+non terminal stmt;
+non terminal matched_stmt;
+non terminal unmatched_stmt;
+non terminal declaration;
+non terminal var_declaration;
+non terminal function_declaration;
+non terminal assignment_expr;
+non terminal expr;
+non terminal logical_or_expr;
+non terminal logical_and_expr;
+non terminal equality_expr;
+non terminal relational_expr;
+non terminal additive_expr;
+non terminal multiplicative_expr;
+non terminal unary_expr;
+non terminal postfix_expr;
+non terminal primary_expr;
+non terminal argument_list;
+non terminal parameter_list;
+non terminal block_stmt;
+non terminal for_stmt;
+non terminal var_declarator_list;
+non terminal var_declarator;
+non terminal const_declarator_list;
+non terminal const_declarator;
+non terminal let_var_declarator_list;
+non terminal let_var_declarator;
+
+/* ===========================
+   PRECEDENCE AND ASSOCIATIVITY
+   =========================== */
+
+precedence left OR;
+precedence left AND;
+precedence left EQ, NE, STRICT_EQ, STRICT_NE;
+precedence left LT, LE, GT, GE;
+precedence left PLUS, MINUS;
+precedence left MULT, DIV;
+precedence right NOT, TYPEOF;
+precedence left DOT, LBRACKET;
+/* ===========================
+   GRAMMAR RULES
+   =========================== */
+
+start with program;
+
+program ::= 
+    stmt_list
+    ;
+
+stmt_list ::= 
+      stmt_list stmt
+    | /* empty */
+    ;
+
+stmt ::=
+      matched_stmt
+    | unmatched_stmt
+    ;
+
+matched_stmt ::=
+      IF LPAREN expr RPAREN matched_stmt ELSE matched_stmt
+    | WHILE LPAREN expr RPAREN matched_stmt
+    | FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON assignment_expr RPAREN 
+matched_stmt
+    | FOR LPAREN var_declaration SEMICOLON expr SEMICOLON assignment_expr RPAREN 
+matched_stmt
+    | RETURN expr SEMICOLON
+    | RETURN SEMICOLON
+    | declaration
+    | assignment_expr SEMICOLON
+    | block_stmt
+    | SEMICOLON
+
+    /* Manejo de errores en IF */ 
+    | IF LPAREN:op error RPAREN matched_stmt 
+    {: 
+    parser.action_obj.report_error("CondiciÃ³n invÃ¡lida en la estructura 'if'", null, opleft, opright); 
+    :} 
+    | IF LPAREN expr RPAREN:op error 
+    {: 
+    parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'if'", 
+null, opleft, opright); 
+    :} 
+    /* Manejo de errores en WHILE */ 
+    | WHILE LPAREN:op error RPAREN matched_stmt 
+    {: 
+    parser.action_obj.report_error("CondiciÃ³n invÃ¡lida en la estructura 'while'", null, opleft, opright); 
+    :} 
+    | WHILE LPAREN expr RPAREN:op error 
+    {: 
+    parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'while'", null, opleft, opright); 
+
+    :} 
+    /* Manejo de errores en FOR */ 
+    | FOR LPAREN:op error SEMICOLON expr SEMICOLON assignment_expr RPAREN matched_stmt 
+    {: 
+    parser.action_obj.report_error("InicializaciÃ³n invÃ¡lida en la estructura 'for'", 
+null, opleft,opright); 
+    :} 
+    | FOR LPAREN assignment_expr SEMICOLON:op error SEMICOLON assignment_expr RPAREN 
+matched_stmt 
+    {: 
+    parser.action_obj.report_error("CondiciÃ³n invÃ¡lida en la estructura 'for'", null, opleft, opright); 
+    :} 
+    | FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON:op error RPAREN matched_stmt 
+    {: 
+    parser.action_obj.report_error("ActualizaciÃ³n invÃ¡lida en la estructura 'for'", 
+null, opleft,opright); 
+    :} 
+    
+    ;
+
+unmatched_stmt ::=
+      IF LPAREN expr RPAREN stmt
+    | IF LPAREN expr RPAREN matched_stmt ELSE unmatched_stmt
+    | WHILE LPAREN expr RPAREN unmatched_stmt
+    | FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON assignment_expr RPAREN 
+unmatched_stmt
+    | FOR LPAREN var_declaration SEMICOLON expr SEMICOLON assignment_expr RPAREN 
+unmatched_stmt
+    ;
+
+block_stmt ::=
+    LBRACE stmt_list RBRACE
+    ;
+
+for_stmt ::= 
+    FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON assignment_expr RPAREN LBRACE stmt 
+RBRACE
+    ;
+
+declaration ::=
+      var_declaration
+    | function_declaration
+    ;
+
+var_declaration ::=
+      VAR var_declarator_list SEMICOLON
+    | LET let_var_declarator_list SEMICOLON  
+    | CONST const_declarator_list SEMICOLON
+    ;
+
+var_declarator_list ::=
+      var_declarator_list COMMA var_declarator
+    | var_declarator
+    ;
+
+var_declarator ::=
+      IDENTIFIER ASSIGN expr
+    | IDENTIFIER
+    ;
+
+let_var_declarator_list ::=
+      let_var_declarator_list COMMA let_var_declarator
+    | let_var_declarator
+    ;
+
+let_var_declarator ::=
+      IDENTIFIER ASSIGN expr
+    | IDENTIFIER
+    ;
+
+const_declarator_list ::=
+      const_declarator_list COMMA const_declarator
+    | const_declarator
+    ;
+
+const_declarator ::=
+      IDENTIFIER:id ASSIGN expr
+    | IDENTIFIER:id
+      {: 
+         parser.action_obj.warn_const_not_initialized(id.toString());
+         RESULT = id;
+      :}
+    ;
+
+function_declaration ::=
+      FUNCTION IDENTIFIER LPAREN RPAREN block_stmt
+    | FUNCTION IDENTIFIER LPAREN parameter_list RPAREN block_stmt
+    ;
+
+parameter_list ::=
+      IDENTIFIER
+    | parameter_list COMMA IDENTIFIER
+    ;
+
+assignment_expr ::=
+      IDENTIFIER ASSIGN expr
+    | expr
+    | IDENTIFIER ASSIGN:op error
+      {:
+        parser.action_obj.report_error("Se esperaba una asignacion valida despues de '='", null, opleft, opright);
+      :}
+    ;
+
+/* ===========================
+   EXPRESIONES ARITMETICAS Y LOGICAS CON MANEJO DE ERRORES
+   =========================== */
+
+expr ::=
+    logical_or_expr
+    ;
+
+logical_or_expr ::=
+      logical_or_expr OR logical_and_expr
+    | logical_and_expr
+    | logical_or_expr:a OR:op error
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida despues de '||'", null, opleft, opright);
+      :}
+    | OR:a logical_or_expr:op
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida antes de '||'", null, aleft, aright);
+      :}
+    ;
+
+logical_and_expr ::=
+      logical_and_expr AND equality_expr
+    | equality_expr
+    | logical_and_expr:a AND:op error
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida despues de '&&'", null, opleft, opright);
+      :}
+    | AND:a logical_and_expr:op
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida antes de '&&'", null, aleft, aright);
+      :}
+    ;
+
+equality_expr ::=
+      equality_expr EQ relational_expr
+    | equality_expr NE relational_expr
+    | equality_expr STRICT_EQ relational_expr
+    | equality_expr STRICT_NE relational_expr
+    | relational_expr
+    | equality_expr:a EQ:op error
+      {:
+        parser.action_obj.report_error("Operador '==' sin termino valido para comparacion", 
+null, opleft, opright);
+      :}
+    | equality_expr:a NE:op error
+      {:
+        parser.action_obj.report_error("Operador '!=' sin termino valido para comparacion",
+null, opleft, opright);
+      :}
+    | equality_expr:a STRICT_EQ:op error
+      {:
+        parser.action_obj.report_error("Operador '===' sin termino valido para comparacion",
+null, opleft, opright);
+      :}
+    | equality_expr:a STRICT_NE:op error
+      {:
+        parser.action_obj.report_error("Operador '!==' sin termino valido para comparacion", null, opleft, opright);
+      :}
+    ;
+
+relational_expr ::=
+      relational_expr LT additive_expr
+    | relational_expr LE additive_expr
+    | relational_expr GT additive_expr
+    | relational_expr GE additive_expr
+    | additive_expr
+    | relational_expr:a LT:op error
+      {:
+        parser.action_obj.report_error("Operador '<' sin termino valido para comparacion", 
+null, opleft, opright);
+      :}
+    | relational_expr:a LE:op error
+      {:
+        parser.action_obj.report_error("Operador '<=' sin termino valido para comparacion", 
+null, opleft, opright);
+      :}
+    | relational_expr:a GT:op error
+      {:
+        parser.action_obj.report_error("Operador '>' sin termino valido para comparacion", 
+null, opleft, opright);
+      :}
+    | relational_expr:a GE:op error
+      {:
+        parser.action_obj.report_error("Operador '>=' sin termino valido para comparacion", 
+null, opleft, opright);
+      :}
+    ;
+
+additive_expr ::=
+      additive_expr PLUS multiplicative_expr
+    | additive_expr MINUS multiplicative_expr
+    | multiplicative_expr
+    | additive_expr:a PLUS:op error
+      {:
+        parser.action_obj.report_error("Se esperaba un termino valido despues de '+' ", null,  opleft, opright);
+      :}
+    | additive_expr:a MINUS:op error
+      {:
+        parser.action_obj.report_error("Se esperaba un termino valido despues de '-' ", null,  opleft, opright);
+      :}
+    ;
+
+multiplicative_expr ::=
+      multiplicative_expr MULT unary_expr
+    | multiplicative_expr DIV unary_expr
+    | unary_expr
+    | multiplicative_expr:a MULT:op error
+      {:
+        parser.action_obj.report_error("Se esperaba un termino valido despues de '*' ", null,  opleft, opright);
+      :}
+    | multiplicative_expr:a DIV:op error
+      {:
+        parser.action_obj.report_error("Se esperaba un termino valido despues de '/' ", null,  opleft, opright);
+      :}
+    ;
+
+unary_expr ::=
+      NOT unary_expr
+    | MINUS unary_expr
+    | PLUS unary_expr
+    | TYPEOF unary_expr
+    | postfix_expr
+    | NOT:op error
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida despues de '!' ", null,  opleft, opright);
+      :}
+    | TYPEOF:op error
+      {:
+        parser.action_obj.report_error("Se esperaba una expresion valida despues de 'typeof' ", null,  opleft, opright);
+      :}
+    ;
+
+postfix_expr ::=
+      primary_expr
+    | postfix_expr DOT IDENTIFIER
+    | postfix_expr LBRACKET expr RBRACKET
+    | postfix_expr LPAREN RPAREN
+    | postfix_expr LPAREN argument_list RPAREN
+    ;
+
+argument_list ::=
+      expr
+    | argument_list COMMA expr
+    ;
+
+primary_expr ::= 
+      IDENTIFIER
+    | NUMBER
+    | STRING_LITERAL
+    | BOOLEAN_LITERAL
+    | NULL_LITERAL
+    | BIGINT
+    | LPAREN expr RPAREN
+    | THIS
+    | LPAREN:a expr:op error
+      {:
+        parser.action_obj.report_error("Parentesis sin cerrar: se esperaba ')'", null, opleft, opright);
+        parser.action_obj.incrementOpenParen();
+      :}
+    | LPAREN:a error RPAREN:op
+      {:
+        parser.action_obj.report_error("Expresion invalida entre parentesis", null, aleft, aright);
+      :}
+    | LPAREN:a RPAREN:op
+       {:
+        parser.action_obj.report_error("Falta expresion entre parentesis", null, aleft, aright);
+      :}
+    ;
+
+comments ::=
+      COMMENT_LINE
+    | COMMENT_BLOCK
+    ;

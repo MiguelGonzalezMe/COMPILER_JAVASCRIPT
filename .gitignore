@@ -1,4 +1,5 @@
 # Archivos y carpetas de NetBeans
+/nbproject
 nbproject/private/
 build/
 dist/

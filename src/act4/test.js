@@ -21,3 +21,13 @@ x + * y;
 (a - b;  
 5 / (2 + );
 
+
+function procesarUsuario(usuario){
+    var resultado= usuario.getInfo();
+    return;
+}
+
+
+if(a!=b){
+    resultado=5;
+}

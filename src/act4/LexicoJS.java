@@ -784,7 +784,7 @@ private Symbol symbol(int type, Object value) {
             }
           case 65: break;
           case 2: 
-            { System.out.println("Linea:"+(yyline+1)+", Columna:"+(yycolumn+1)+" -> IDENTIFIER: " + yytext());
+            { /*System.out.println("Linea:"+(yyline+1)+", Columna:"+(yycolumn+1)+" -> IDENTIFIER: " + yytext());*/
     return symbol(IDENTIFIER, yytext());
             }
           case 66: break;

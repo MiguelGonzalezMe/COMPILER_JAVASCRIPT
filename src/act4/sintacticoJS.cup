@@ -1,603 +1,2076 @@
+/*
 
-/* 
- 
-FREGOZO ARÉCHIGA JAASIEL 
-HERRERA CASTILLO KENIA GUADALUPE 
-GONZALEZ MENDOZA MIGUEL ÁNGEL 
-JAVASCRIPT PARSER (CUP COMPATIBLE) 
+  FREGOZO ARÉCHIGA JAASIEL
+  HERRERA CASTILLO KENIA GUADALUPE
+  GONZALEZ MENDOZA MIGUEL ÁNGEL
+  **JAVASCRIPT PARSER
+  **CON VALIDACIÓN COMPLETA DE TIPOS Y EXPRESIONES
+
 */
 
-package act4; 
-import java_cup.runtime.*; 
-import java.io.*; 
-import java.util.Stack; 
-import java.util.HashSet; 
 
-parser code{: 
-public void syntax_error(Symbol s){ 
-//report_error("ERROR de sintaxis", s); 
-} 
-public void report_error(String message, Object info) { 
-//System.err.println(message); 
-} 
-:} 
-action code {: 
-private int openParenCount = 0; 
-private int closeParenCount = 0; 
-    private java.util.Stack<java.util.HashSet<String>> symbolTable = new 
-java.util.Stack<java.util.HashSet<String>>(); 
-     
-    { 
-        symbolTable.push(new java.util.HashSet<String>()); 
-    } 
-     
-    public void checkParenthesesBalance() { 
-        if (openParenCount != closeParenCount) { 
-            System.err.println("ERROR: Paréntesis desbalanceados - " +  
-                             openParenCount + " abiertos, " +  
-                             closeParenCount + " cerrados"); 
-        } 
-    } 
-     
-    public void incrementOpenParen() { openParenCount++; } 
-    public void incrementCloseParen() { closeParenCount++; } 
-     
-    public void report_error(String message, Object info) { 
-        System.err.println("Error: " + message + " " + info); 
-    } 
-     
-    public void report_error(String message, Object info, int line, int column) { 
-        System.err.println("ERROR en linea " + line + ", columna " + column + ": " + message); 
-    } 
- 
-    public void report_fatal_error(String message, Object info) { 
-        report_error(message, info); 
-        throw new RuntimeException(message); 
-    } 
- 
-    public void report_fatal_error(String message, Object info, int line, int column) { 
-        report_error(message, info, line, column); 
-        throw new RuntimeException(message + " en línea " + line + ", columna " + column); 
-    } 
- 
-    public void warn_const_not_initialized(String identifier) { 
-        System.err.println("WARNING: const variable '" + identifier + "' is declared but not 
-initialized."); 
-    } 
-     
-    public void declareVariable(String identifier) { 
-        if (!symbolTable.isEmpty()) { 
-            symbolTable.peek().add(identifier); 
-        } 
-    } 
-     
-    public boolean isVariableDeclared(String identifier) { 
-        for (java.util.HashSet<String> scope : symbolTable) { 
-            if (scope.contains(identifier)) { 
-                return true; 
-            } 
-        } 
-        return false; 
-    } 
-     
-    public void checkVariableUsage(String identifier, int line, int column) { 
-        if (!isVariableDeclared(identifier)) { 
-            System.err.println("ERROR en linea " + line + ", columna " + column +  
-                             ": Variable '" + identifier + "' is used but not declared"); 
-        } 
-    } 
-     
-    public void enterScope() { 
-        symbolTable.push(new java.util.HashSet<String>()); 
-    } 
-     
-    public void exitScope() { 
-        if (symbolTable.size() > 1) { 
-            symbolTable.pop(); 
-        } 
-    } 
-:} 
- 
-scan with{: 
-    return getScanner().next_token(); 
-:} 
- 
-/* =========================== 
-   TERMINAL SYMBOLS 
-   =========================== */ 
- 
-// Keywords 
-terminal SYMBOL, IF, ELSE, WHILE, FOR, FUNCTION, RETURN, LET, CONST, NEW; 
-terminal THIS, CLASS, EXTENDS, SUPER, IMPORT, EXPORT, DEFAULT, TRY, CATCH, FINALLY; 
-terminal THROW, TYPEOF, INSTANCEOF, DELETE, IN, VOID, VAR, STATIC, ASYNC, AWAIT, 
-CONSTRUCTOR; 
-// Literals 
-terminal NUMBER, STRING_LITERAL, BOOLEAN_LITERAL, NULL_LITERAL, BIGINT; 
-// Operators 
-terminal STRICT_EQ, STRICT_NE, EQ, NE, LE, GE, LT, GT, AND, OR, NOT; 
-terminal PLUS, MINUS, MULT, DIV, ASSIGN; 
-// Delimiters 
-terminal LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET; 
-terminal SEMICOLON, COMMA, DOT, QUESTION, COLON; 
+
+package act4;
+
+import java_cup.runtime.*; import java.io.*;
+import java.util.Stack; import java.util.HashSet; import java.util.HashMap;
+
+
+parser code{:
+
+  public void syntax_error(Symbol s){
+
+  }
+
+  public void report_error(String message, Object info) {
+
+  }
+
+:}
+
+action code {:
+
+  class SymbolInfo
+
+  {
+	String tipo;
+	String alcance;
+	Object valor;
+	int lineaDeclaracion;
+	int columnaDeclaracion;
+	boolean isConst;
+	boolean isInitialized;
+
+	// ======== NEW: For functions/methods ========
+
+	int numParametros;
+
+	java.util.List<String> tiposParametros;
+
+	String tipoRetorno;
+
+	// ============================================
+
+
+	public SymbolInfo(String tipo, String alcance, int linea, int columna)
+	{
+	this.tipo = tipo;
+	this.alcance = alcance;
+	this.lineaDeclaracion = linea;
+	this.columnaDeclaracion = columna;
+	this.isConst = false;
+	this.isInitialized = false;
+
+	// NEW: Initialize function-related fields
+	this.numParametros = 0;
+	this.tiposParametros = new java.util.ArrayList<String>();
+	this.tipoRetorno = null;
+
+	}
+
+	public SymbolInfo(String tipo, String alcance, int linea, int columna, boolean isConst, boolean isInit)
+	{
+	this.tipo = tipo;
+	this.alcance = alcance;
+	this.lineaDeclaracion = linea;
+	this.columnaDeclaracion = columna;
+	this.isConst = isConst;
+	this.isInitialized = isInit;
+	this.numParametros = 0;
+	this.tiposParametros = new java.util.ArrayList<String>();
+	this.tipoRetorno = null;
+
+	}
+
+	// ======== Constructor for functions ========
+
+	public SymbolInfo(String tipo, String alcance, int linea, int columna,
+
+	int numParams, java.util.List<String> paramTypes, String returnType)
+
+	{
+
+	this.tipo = tipo;
+	this.alcance = alcance;
+	this.lineaDeclaracion = linea;
+	this.columnaDeclaracion = columna;
+	this.isConst = false;
+	this.isInitialized = true;
+	this.numParametros = numParams;
+	this.tiposParametros = new java.util.ArrayList<String>(paramTypes);
+	this.tipoRetorno = returnType;
+
+	}
+
+	// ================================================
+
+  }
+
+  private int openParenCount = 0;
+  private int closeParenCount = 0;
+  private int errorCount = 0;
+  private int warningCount = 0;
+  private int currentParamCount = 0;
+
+	//Ambitos se manejan con esta pila
+
+ private java.util.Stack<java.util.HashMap<String, SymbolInfo>> symbolTable = new java.util.Stack<java.util.HashMap<String, SymbolInfo>>();
+  {
+
+	symbolTable.push(new java.util.HashMap<String, SymbolInfo>());
+	SymbolInfo consoleInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("console", consoleInfo);
+
+	// Add console.log as a method
+
+	java.util.List<String> logParams = new java.util.ArrayList<String>();
+	logParams.add("any"); // console.log accepts any type
+	SymbolInfo logInfo = new SymbolInfo("function", "global", 0, 0, 1, logParams, "void");
+	symbolTable.peek().put("console.log", logInfo);
+
+
+	// Optional: Add other common globals
+
+	// window
+
+	SymbolInfo windowInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("window", windowInfo);
+
+	// document
+
+	SymbolInfo documentInfo = new SymbolInfo("object", "global", 0, 0);
+
+	symbolTable.peek().put("document", documentInfo);
+
+
+
+	// Math
+
+	SymbolInfo mathInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("Math", mathInfo);
+
+
+
+	// Common Math methods
+
+	java.util.List<String> mathParams = new java.util.ArrayList<String>();
+	mathParams.add("number");
+	symbolTable.peek().put("Math.floor", new SymbolInfo("function", "global", 0, 0, 1, mathParams, "number"));
+	symbolTable.peek().put("Math.ceil", new SymbolInfo("function", "global", 0, 0, 1, mathParams, "number"));
+	symbolTable.peek().put("Math.round", new SymbolInfo("function", "global", 0, 0, 1, mathParams, "number"));
+	symbolTable.peek().put("Math.abs", new SymbolInfo("function", "global", 0, 0, 1, mathParams, "number"));
+
+
+
+	java.util.List<String> mathTwoParams = new java.util.ArrayList<String>();
+
+	mathTwoParams.add("number");
+	mathTwoParams.add("number");
+	symbolTable.peek().put("Math.max", new SymbolInfo("function", "global", 0, 0, 2, mathTwoParams, "number"));
+	symbolTable.peek().put("Math.min", new SymbolInfo("function", "global", 0, 0, 2, mathTwoParams, "number"));
+
+	symbolTable.peek().put("Math.pow", new SymbolInfo("function", "global", 0, 0, 2, mathTwoParams, "number"));
+
+	// Array
+
+	SymbolInfo arrayInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("Array", arrayInfo);
+
+	// String
+
+	SymbolInfo stringInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("String", stringInfo);
+
+	// Number
+
+	SymbolInfo numberInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("Number", numberInfo);
+
+	// Boolean
+
+	SymbolInfo booleanInfo = new SymbolInfo("object", "global", 0, 0);
+	symbolTable.peek().put("Boolean", booleanInfo);
+
+	// Common global functions
+
+	java.util.List<String> parseIntParams = new java.util.ArrayList<String>();
+	parseIntParams.add("string");
+	symbolTable.peek().put("parseInt", new SymbolInfo("function", "global", 0, 0, 1, parseIntParams, "number"));
+	symbolTable.peek().put("parseFloat", new SymbolInfo("function", "global", 0, 0, 1, parseIntParams, "number"));
+
+	java.util.List<String> isNaNParams = new java.util.ArrayList<String>();
+	isNaNParams.add("any");
+	symbolTable.peek().put("isNaN", new SymbolInfo("function", "global", 0, 0, 1, isNaNParams, "boolean"));
+	symbolTable.peek().put("isFinite", new SymbolInfo("function", "global", 0, 0, 1, isNaNParams, "boolean"));
+
+	// setTimeout/setInterval
+
+	java.util.List<String> timerParams = new java.util.ArrayList<String>();
+	timerParams.add("function");
+	timerParams.add("number");
+        symbolTable.peek().put("setTimeout", new SymbolInfo("function", "global", 0, 0, 2, timerParams, "number"));
+	symbolTable.peek().put("setInterval", new SymbolInfo("function", "global", 0, 0, 2, timerParams, "number"));
+
+	// alert, prompt, confirm
+
+	java.util.List<String> alertParams = new java.util.ArrayList<String>();
+	alertParams.add("string");
+	symbolTable.peek().put("alert", new SymbolInfo("function", "global", 0, 0, 1, alertParams, "void"));
+	symbolTable.peek().put("prompt", new SymbolInfo("function", "global", 0, 0, 1, alertParams, "string"));
+	symbolTable.peek().put("confirm", new SymbolInfo("function", "global", 0, 0, 1, alertParams, "boolean"));
+	// ================================================
+
+  }
+
+  // ===========================================
+
+
+
+  private java.util.List<String> currentFunctionParams = new java.util.ArrayList<String>();
+  private java.util.List<String> currentParamNames = new java.util.ArrayList<String>();
+  private String currentFunctionName = null;
+  private String currentFunctionReturnType = null;
+
+
+  public void checkParenthesesBalance(int line, int column)
+  {
+
+	if (openParenCount != closeParenCount) {
+	printError("ERROR", "Paréntesis desbalanceados -> " +
+	openParenCount + " abiertos, " +
+	closeParenCount + " cerrados", line, column);
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  public void incrementOpenParen() { openParenCount++; }
+  public void incrementCloseParen() { closeParenCount++; }
+
+
+  public void printError(String tipo, String mensaje, int line, int column) {
+	System.out.println(tipo + " en linea " + line + ", columna " + column + ": " + mensaje);
+	System.out.println();
+  }
+
+
+  public void report_error(String message, Object info){
+	printError("ERROR", message, 0, 0);
+	errorCount++;
+
+  }
+
+  public void report_error(String message, Object info, int line, int column){
+	printError("ERROR", message, line, column);
+	errorCount++;
+
+  }
+
+  public void report_fatal_error(String message, Object info){
+	report_error(message, info);
+	throw new RuntimeException(message);
+
+  }
+
+  public void report_fatal_error(String message, Object info, int line, int column){
+	report_error(message, info, line, column);
+	throw new RuntimeException(message + " en linea " + line + ", columna " + column);
+
+  }
+
+  public void warn_const_not_initialized(String identifier){
+	System.out.println("⚠ WARNING: const variable '" + identifier + "' declarada pero no inicializada.");
+	warningCount++;
+
+  }
+
+  // VALIDACIÓN DE OPERACIONES ARITMÉTICAS
+
+ public void checkArithmeticOperation(String tipo1, String tipo2, String operator, int line, int column){
+	if (!tipo1.equals("number") && !tipo1.equals("unknown") && !tipo1.equals("undefined"))
+	{
+
+	printError("ERROR",
+	"Operador '" + operator + "' no puede aplicarse a tipo '" + tipo1 + "'. Se esperaba 'number'",
+	line, column);
+	errorCount++;
+
+	}
+
+	if (!tipo2.equals("number") && !tipo2.equals("unknown") && !tipo2.equals("undefined"))
+
+	{
+
+	printError("ERROR",
+
+	"Operador '" + operator + "' no puede aplicarse a tipo '" + tipo2 + "'. Se esperaba 'number'",
+
+	line, column);
+
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  // VALIDACIÓN DE OPERACIONES LÓGICAS
+
+  public void checkLogicalOperation(String tipo1, String tipo2, String operator, int line, int column){
+	// JavaScript hace coerción, pero advertimos si no son booleanos explícitos
+	if (!tipo1.equals("boolean") && !tipo1.equals("unknown") && !tipo1.equals("undefined")){
+
+	System.out.println("ERROR en linea " + line + ", columna " + column +
+	": Operador '" + operator + "' usado con tipo '" + tipo1 + "' (se esperaba boolean)");
+	errorCount++;
+	}
+
+	if (!tipo2.equals("boolean") && !tipo2.equals("unknown") && !tipo2.equals("undefined"))
+
+	{
+
+	System.out.println("ERROR en linea " + line + ", columna " + column +
+
+	": Operador '" + operator + "' usado con tipo '" + tipo2 + "' (se esperaba boolean)");
+        errorCount++;
+
+	}
+
+  }
+
+
+
+  // VALIDACIÓN DE COMPARACIONES
+
+  public void checkComparisonTypes(String tipo1, String tipo2, String operator, int line, int column){
+
+	if (!tipo1.equals(tipo2) && !tipo1.equals("unknown") && !tipo2.equals("unknown")
+	&& !tipo1.equals("undefined") && !tipo2.equals("undefined")) {
+
+	System.out.println("ERROR en linea " + line + ", columna " + column +
+	": Comparación con '" + operator + "' entre tipos incompatibles: '" + tipo1 + "' y '" + tipo2 + "'");
+	errorCount++;
+	}
+
+  }
+
+  // VALIDACIÓN DE DIVISIÓN POR CERO
+
+  public void checkDivisionByZero(String divisor, int line, int column)
+
+  {
+
+	if (divisor != null  && divisor.equals("0"))
+
+	{
+
+	printError("ERROR", "División por cero detectada", line, column);
+
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  // VALIDACIÓN DE CONVERSIONES DE TIPO
+
+  public void checkTypeConversion(String fromType, String toType, int line, int column)
+
+  {
+
+	if (fromType.equals("string") && toType.equals("number"))
+
+	{
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + column +
+
+	": Conversión implícita de string a number puede resultar en NaN");
+
+	warningCount++;
+
+	}
+
+	if (fromType.equals("object") && toType.equals("number"))
+
+	{
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + column +
+
+	": Conversión de object a number puede no ser válida");
+
+	warningCount++;
+
+	}
+
+  }
+
+
+
+  // VALIDACIÓN DE CONDICIONES BOOLEANAS
+
+  public void checkBooleanCondition(String tipo, String estructura, int line, int column)
+
+  {
+
+	if (!tipo.equals("boolean") && !tipo.equals("unknown") && !tipo.equals("undefined"))
+
+	{
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + column +
+
+	": Condicion en '" + estructura + "' no es de tipo boolean. Tipo encontrado: '" + tipo + "'");
+
+	warningCount++;
+
+	}
+
+  }
+
+
+
+  public void declareVariable(String identifier, String tipo, String alcance, int line, int column)
+
+  {
+
+	declareVariable(identifier, tipo, alcance, line, column, false, true);
+
+  }
+
+
+
+ public void declareVariable(String identifier, String tipo, String alcance, int line, int column, boolean isConst, boolean isInit)
+
+  {
+
+	if (!symbolTable.isEmpty())
+
+	{
+
+	if (symbolTable.peek().containsKey(identifier))
+
+	{
+
+	printError("ERROR",
+
+	"Identificador '" + identifier + "' ya declarado en este ambito (linea " +
+
+	symbolTable.peek().get(identifier).lineaDeclaracion + ")",
+
+	line, column);
+
+	errorCount++;
+
+	} else
+
+	{
+
+	SymbolInfo info = new SymbolInfo(tipo, alcance, line, column, isConst, isInit);
+
+	symbolTable.peek().put(identifier, info);
+
+	}
+
+	}
+
+  }
+
+
+
+  public boolean isVariableDeclared(String identifier) {
+
+	for (java.util.HashMap<String, SymbolInfo> scope : symbolTable) {
+
+	if (scope.containsKey(identifier)) {
+
+	return true;
+
+	}
+
+	}
+
+	return false;
+
+  }
+
+
+
+  public SymbolInfo getSymbolInfo(String identifier) {
+
+	for (java.util.HashMap<String, SymbolInfo> scope : symbolTable) {
+
+	if (scope.containsKey(identifier)) {
+
+	return scope.get(identifier);
+
+	}
+
+	}
+
+	return null;
+
+  }
+
+
+
+  public void checkTypeCompatibility(String identifier, String assignedType, int line, int column) {
+
+	SymbolInfo info = getSymbolInfo(identifier);
+
+	if (info != null) {
+
+	// Verificar si es const
+
+	if (info.isConst && info.isInitialized) {
+
+	printError("ERROR",
+
+	"No se puede reasignar la constante '" + identifier + "' (declarada en linea " +
+
+	info.lineaDeclaracion + ")",
+
+	line, column);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	// Verificar compatibilidad de tipos
+
+	if (!info.tipo.equals("undefined") && !info.tipo.equals("unknown")) {
+
+	if (!info.tipo.equals(assignedType) && !assignedType.equals("unknown") &&
+!assignedType.equals("undefined")) {
+
+	printError("ERROR",
+
+	"Tipo de dato incompatible en la asignación a '" + identifier +
+
+	"'. Esperado: '" + info.tipo + "', pero se asignó: '" + assignedType + "'",
+
+	line, column);
+
+	errorCount++;
+
+	}
+
+	}
+
+
+
+	info.isInitialized = true;
+
+	}
+
+  }
+
+
+
+  public String inferType(Object value) {
+
+	if (value instanceof Number) return "number";
+
+	if (value instanceof String) return "string";
+
+	if (value instanceof Boolean) return "boolean";
+
+	return "unknown";
+
+  }
+
+
+
+  public void checkVariableUsage(String identifier, int line, int column) {
+
+	if (!isVariableDeclared(identifier)) {
+
+	printError("ERROR",
+
+	"Identificador '" + identifier + "' no declarado",
+
+	line, column);
+
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  public void enterScope() {
+
+	symbolTable.push(new java.util.HashMap<String, SymbolInfo>());
+
+  }
+
+
+
+  public void exitScope() {
+
+	if (symbolTable.size() > 1) {
+
+	symbolTable.pop();
+
+	}
+
+  }
+
+
+
+  public void printSummary() {
+
+	System.out.println();
+
+	System.out.println(" RESUMEN DE ANÁLISIS");
+
+	System.out.println(" Errores encontrados: " + errorCount);
+
+	System.out.println(" Advertencias: " + warningCount);
+
+	if (errorCount == 0 && warningCount == 0) {
+
+	System.out.println("Analisis completado sin problemas");
+
+	} else if (errorCount == 0) {
+
+	System.out.println(" Sin errores criticos");
+
+	System.out.println();
+
+	} else {
+
+	System.out.println("Se encontraron errores que deben corregirse");
+
+	System.out.println();
+
+	}
+
+	System.out.println();
+
+  }
+
+
+
+  public void startFunctionDeclaration(String functionName) {
+
+	currentFunctionName = functionName;
+
+	currentFunctionParams = new java.util.ArrayList<String>();
+
+  }
+
+
+
+  // Called when a parameter is declared
+
+  public void addFunctionParameter(String paramName, String paramType) {
+
+	currentFunctionParams.add(paramType);
+
+  }
+
+
+
+  // Called when finishing function declaration
+
+  public void endFunctionDeclaration(String functionName, String alcance, int line, int col) {
+
+	if (!symbolTable.isEmpty()) {
+
+	if (symbolTable.peek().containsKey(functionName)) {
+
+	printError("ERROR",
+
+	"Función '" + functionName + "' ya declarada en este ámbito (linea " +
+
+	symbolTable.peek().get(functionName).lineaDeclaracion + ")",
+
+	line, col);
+
+	errorCount++;
+
+	} else {
+
+	SymbolInfo info = new SymbolInfo("function", alcance, line, col,
+
+	currentFunctionParams.size(),
+
+	currentFunctionParams,
+
+	"unknown");
+
+	symbolTable.peek().put(functionName, info);
+
+	}
+
+	}
+
+	currentFunctionParams = new java.util.ArrayList<String>();
+
+	currentFunctionName = null;
+
+  }
+
+
+
+  public void validateFunctionCall(String functionName, int numArgs, int line, int col) {
+
+
+
+	if (functionName == null || functionName.equals("unknown")) {
+
+	return;
+
+	}
+
+
+
+	SymbolInfo info = getSymbolInfo(functionName);
+
+
+
+	// Check if function exists
+
+	if (info == null) {
+
+	printError("ERROR",
+
+	"Función '" + functionName + "' no está definida",
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	// Check if it's actually a function
+
+	if (!info.tipo.equals("function")) {
+
+	printError("ERROR",
+
+	"'" + functionName + "' no es una función (es de tipo '" + info.tipo + "')",
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	// Check parameter count
+
+	if (info.numParametros != numArgs) {
+
+	printError("ERROR",
+
+	"Función '" + functionName + "' espera " + info.numParametros +
+
+	" argumento(s) pero recibió " + numArgs,
+
+	line, col);
+
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  // Validate function call with type checking
+
+  public void validateFunctionCallWithTypes(String functionName, java.util.List<String> argTypes,
+
+	int line, int col) {
+
+	SymbolInfo info = getSymbolInfo(functionName);
+
+	if (info == null) {
+
+	printError("ERROR",
+
+	"Función '" + functionName + "' no está definida",
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	if (!info.tipo.equals("function")) {
+
+	printError("ERROR",
+
+	"'" + functionName + "' no es una función",
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	// Check parameter count
+
+	if (info.numParametros != argTypes.size()) {
+
+	printError("ERROR",
+
+	"Función '" + functionName + "' espera " + info.numParametros +
+
+	" argumento(s) pero recibió " + argTypes.size(),
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+
+
+	// Check parameter types (if we have type information)
+
+	for (int i = 0; i < argTypes.size(); i++) {
+
+	String expectedType = info.tiposParametros.get(i);
+
+	String actualType = argTypes.get(i);
+
+
+
+	if (!expectedType.equals("parameter") && !actualType.equals(expectedType)
+
+	&& !actualType.equals("unknown") && !expectedType.equals("unknown")) {
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + col +
+
+	": Argumento " + (i+1) + " de función '" + functionName +
+
+	"': tipo esperado '" + expectedType + "' pero recibió '" + actualType + "'");
+
+	warningCount++;
+
+	}
+
+	}
+
+  }
+
+
+
+  // Set expected return type for current function
+
+  public void setCurrentFunctionReturnType(String type) {
+
+	currentFunctionReturnType = type;
+
+  }
+
+
+
+  // Validate return statement type
+
+  public void validateReturnStatement(String returnType, int line, int col) {
+
+	if (currentFunctionName == null && currentFunctionReturnType == null) {
+
+	printError("ERROR",
+
+	"Sentencia 'return' fuera de una función",
+
+	line, col);
+
+	errorCount++;
+
+	return;
+
+	}
+
+	// Check if return type matches (if we track return types)
+
+	if (currentFunctionReturnType != null && !currentFunctionReturnType.equals("unknown")
+
+	&& !returnType.equals("unknown") && !returnType.equals(currentFunctionReturnType)) {
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + col +
+
+	": La función debe retornar tipo '" + currentFunctionReturnType +
+
+	"' pero está retornando '" + returnType + "'");
+
+	warningCount++;
+
+	}
+
+  }
+
+
+
+  // Enhanced while loop validation
+
+  public void validateWhileLoop(String conditionType, int line, int col) {
+
+	checkBooleanCondition(conditionType, "while", line, col);
+
+
+
+	// Warn about potential infinite loops
+
+	if (conditionType.equals("boolean")) {
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + col +
+
+	": Bucle 'while' con condicion constante (posible bucle infinito)");
+
+	warningCount++;
+
+	}
+
+  }
+
+
+
+  // Enhanced for loop validation
+
+  public void validateForLoop(String conditionType, int line, int col) {
+
+	checkBooleanCondition(conditionType, "for", line, col);
+
+  }
+
+  // Validate method definitions in classes
+
+  public void validateMethodDefinition(String methodName, int numParams, int line, int col) {
+
+	SymbolInfo existing = getSymbolInfo(methodName);
+
+	if (existing != null && !existing.tipo.equals("function")) {
+
+	printError("ERROR",
+
+	"El identificador '" + methodName + "' ya está declarado como " +
+
+	existing.tipo + " (linea " + existing.lineaDeclaracion + ")",
+
+	line, col);
+
+	errorCount++;
+
+	}
+
+  }
+
+
+
+  // Check if string is used in condition (common mistake)
+
+  public void validateConditionType(String exprType, int line, int col) {
+
+	if (exprType.equals("string")) {
+
+	System.out.println("⚠ WARNING en linea " + line + ", columna " + col +
+
+	": Usando string en condicion - esto siempre será verdadero si no está vacío");
+
+	warningCount++;
+
+	}
+
+  }
+
+
+
+  // =====================================================
+
+:}
+
+
+
+scan with{:
+
+  return getScanner().next_token();
+
+:}
+
+/* ===========================
+
+ TERMINAL SYMBOLS
+
+  =========================== */
+
+
+
+// Keywords
+
+terminal SYMBOL, IF, ELSE, WHILE, FOR, FUNCTION, RETURN, LET, CONST, NEW;
+
+terminal THIS, CLASS, EXTENDS, SUPER, IMPORT, EXPORT, DEFAULT, TRY, CATCH, FINALLY;
+
+terminal THROW, TYPEOF, INSTANCEOF, DELETE, IN, VOID, VAR, STATIC, ASYNC, AWAIT, CONSTRUCTOR;
+
+
+
+// Literals
+
+terminal NUMBER, STRING_LITERAL, BOOLEAN_LITERAL, NULL_LITERAL, BIGINT;
+
+
+
+// Operators
+
+terminal STRICT_EQ, STRICT_NE, EQ, NE, LE, GE, LT, GT, AND, OR, NOT; terminal PLUS, MINUS, MULT, DIV, ASSIGN;
+
+
+// Delimiters
+
+terminal LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET; terminal SEMICOLON, COMMA, DOT, QUESTION, COLON;
+
+
 // Identifiers and errors 
-terminal String IDENTIFIER; 
-terminal COMMENT_LINE, COMMENT_BLOCK; 
-terminal ERROR; 
-/* =========================== 
-NON-TERMINAL SYMBOLS 
-=========================== */ 
-non terminal program; 
-non terminal stmt_list; 
-non terminal stmt; 
-non terminal matched_stmt; 
-non terminal unmatched_stmt; 
-non terminal declaration; 
-non terminal var_declaration; 
-non terminal function_declaration; 
-non terminal class_declaration; 
-non terminal class_body; 
-non terminal class_element_list; 
-non terminal class_element; 
-non terminal method_definition; 
-non terminal constructor_definition; 
-non terminal assignment_expr; 
-non terminal expr; 
-non terminal logical_or_expr; 
-non terminal logical_and_expr; 
-non terminal equality_expr; 
-non terminal relational_expr; 
-non terminal additive_expr; 
-non terminal multiplicative_expr; 
-non terminal unary_expr; 
-non terminal postfix_expr; 
-non terminal primary_expr; 
-non terminal argument_list; 
-non terminal parameter_list; 
-non terminal block_stmt; 
-non terminal var_declarator_list; 
-non terminal var_declarator; 
-non terminal const_declarator_list; 
-non terminal const_declarator; 
-non terminal let_var_declarator_list; 
-non terminal let_var_declarator; 
-/* =========================== 
-PRECEDENCE AND ASSOCIATIVITY 
-=========================== */ 
-precedence left OR; 
-precedence left AND; 
-precedence left EQ, NE, STRICT_EQ, STRICT_NE; 
-precedence left LT, LE, GT, GE; 
-precedence left PLUS, MINUS; 
-precedence left MULT, DIV; 
-precedence right NOT, TYPEOF; 
-precedence left DOT, LBRACKET; 
-/* =========================== 
-GRAMMAR RULES 
-=========================== */ 
-start with program; 
-program ::=  
-stmt_list 
-; 
-stmt_list ::=  
-stmt_list stmt 
-| /* empty */ 
-; 
-stmt ::= 
+terminal String IDENTIFIER;
+terminal COMMENT_LINE, COMMENT_BLOCK;
+terminal ERROR;
+
+
+
+/* ===========================
+
+ NON-TERMINAL SYMBOLS
+
+  =========================== */
+
+
+
+non terminal program; non terminal stmt_list; non terminal stmt;
+non terminal matched_stmt;
+
+non terminal function_scoped_block; non terminal unmatched_stmt;
+non terminal declaration; non terminal var_declaration;
+non terminal function_declaration; non terminal class_declaration; non terminal class_body;
+non terminal class_element_list; non terminal class_element; non terminal method_definition; non terminal scoped_block;
+non terminal function_block; non terminal method_block;
+non terminal constructor_definition; non terminal assignment_expr;
+non terminal String expr;
+
+non terminal String logical_or_expr; non terminal String logical_and_expr; non terminal String equality_expr; non terminal String relational_expr; non terminal String additive_expr;
+non terminal String multiplicative_expr;
+
+non terminal String unary_expr; non terminal String postfix_expr;
+non terminal Integer argument_count; non terminal String primary_expr; non terminal argument_list;
+non terminal parameter_list; non terminal block_stmt;
+non terminal var_declarator_list; non terminal var_declarator;
+non terminal const_declarator_list; non terminal const_declarator;
+non terminal let_var_declarator_list; non terminal let_var_declarator; non terminal for_init;
+
+
+/* ===========================
+
+ PRECEDENCE AND ASSOCIATIVITY
+
+  =========================== */
+
+
+
+precedence left OR; precedence left AND;
+precedence left EQ, NE, STRICT_EQ, STRICT_NE; precedence left LT, LE, GT, GE;
+precedence left PLUS, MINUS; precedence left MULT, DIV; precedence right NOT, TYPEOF; precedence left DOT, LBRACKET;
+
+/* ===========================
+
+ GRAMMAR RULES - CONFLICT FREE
+
+  =========================== */
+
+
+
+start with program;
+
+
+
+program ::=
+
+  stmt_list
+
+  {:
+
+	/*parser.action_obj.checkParenthesesBalance(0, 0);*/
+
+	parser.action_obj.printSummary();
+
+  :}
+
+  ;
+
+
+
+stmt_list ::=
+
+	stmt_list stmt
+
+  | /* empty */
+
+  ;
+
+
+
+stmt ::=
+
+	matched_stmt
+
+  | unmatched_stmt
+
+  ;
+
+
+
+matched_stmt ::=
+
+	IF LPAREN expr:e RPAREN matched_stmt ELSE matched_stmt
+
+	{:
+
+	// NOW checks if e is actually boolean type
+    parser.action_obj.checkBooleanCondition((String)e, "if", eleft, eright); 
+      :} 
+    | WHILE LPAREN expr:e RPAREN matched_stmt 
+      {: 
+        parser.action_obj.validateWhileLoop((String)e, eleft, eright); 
+      :} 
+    | FOR LPAREN for_init SEMICOLON expr:e SEMICOLON assignment_expr RPAREN 
 matched_stmt 
-| unmatched_stmt 
-; 
-matched_stmt ::= 
-IF LPAREN expr RPAREN matched_stmt ELSE matched_stmt 
-| WHILE LPAREN expr RPAREN matched_stmt 
-| FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON assignment_expr RPAREN 
-matched_stmt 
-| FOR LPAREN var_declaration SEMICOLON expr SEMICOLON assignment_expr RPAREN 
-matched_stmt 
-| RETURN expr SEMICOLON 
-| RETURN SEMICOLON 
-| declaration 
-| assignment_expr SEMICOLON 
-| block_stmt 
-| SEMICOLON 
-/* Manejo de errores en IF */  
-| IF LPAREN:op error RPAREN matched_stmt  
-{:  
-parser.action_obj.report_error("Condición inválida en la estructura 'if'", null, opleft, opright);
-:}  
-| IF LPAREN expr RPAREN:op error  
-{:  
-parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'if'", null, opleft, 
-opright);  
-:}  
-/* Manejo de errores en WHILE */  
-| WHILE LPAREN:op error RPAREN matched_stmt  
-{:  
-        parser.action_obj.report_error("Condición inválida en la estructura 'while'", null, opleft, 
-opright);  
-    :}  
-    | WHILE LPAREN expr RPAREN:op error  
+      {: 
+        parser.action_obj.validateForLoop((String)e, eleft, eright); 
+      :} 
+| RETURN expr:e SEMICOLON 
+      {: 
+        parser.action_obj.validateReturnStatement((String)e, eleft, eright); 
+      :} 
+    | RETURN SEMICOLON 
+      {: 
+        parser.action_obj.validateReturnStatement("void", 0, 0); 
+      :} 
+    | declaration 
+    | assignment_expr SEMICOLON 
+    | block_stmt 
+    | SEMICOLON 
+ 
+    /* Manejo de errores en IF */  
+    | IF LPAREN:op error RPAREN matched_stmt  
     {:  
-        parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'while'", null, 
-opleft, opright);  
-    :}  
-     
-    /* Manejo de errores en FOR */  
-    | FOR LPAREN:op error SEMICOLON expr SEMICOLON assignment_expr RPAREN matched_stmt  
-    {:  
-        parser.action_obj.report_error("Inicialización inválida en la estructura 'for'", null, opleft, 
-opright);  
-    :}  
-    | FOR LPAREN assignment_expr SEMICOLON:op error SEMICOLON assignment_expr RPAREN 
-matched_stmt  
-    {:  
-        parser.action_obj.report_error("Condición inválida en la estructura 'for'", null, opleft, opright);  
-    :}  
-    | FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON:op error RPAREN matched_stmt  
-    {:  
-        parser.action_obj.report_error("Actualización inválida en la estructura 'for'", null, opleft, 
-opright);  
-    :}  
-    ; 
- 
-unmatched_stmt ::= 
-      IF LPAREN expr RPAREN stmt 
-    | IF LPAREN expr RPAREN matched_stmt ELSE unmatched_stmt 
-    | WHILE LPAREN expr RPAREN unmatched_stmt 
-    | FOR LPAREN assignment_expr SEMICOLON expr SEMICOLON assignment_expr RPAREN 
-unmatched_stmt 
-    | FOR LPAREN var_declaration SEMICOLON expr SEMICOLON assignment_expr RPAREN 
-unmatched_stmt 
-    ; 
- 
-block_stmt ::= 
-    LBRACE stmt_list RBRACE 
-    ; 
- 
-declaration ::= 
-      var_declaration 
-    | function_declaration 
-    | class_declaration 
-    ; 
- 
-var_declaration ::= 
-      VAR var_declarator_list SEMICOLON 
-    | LET let_var_declarator_list SEMICOLON   
-    | CONST const_declarator_list SEMICOLON 
-    ; 
- 
-var_declarator_list ::= 
-      var_declarator_list COMMA var_declarator 
-    | var_declarator 
-    ; 
- 
-var_declarator ::= 
-      IDENTIFIER:id ASSIGN expr 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    | IDENTIFIER:id 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    ; 
- 
-let_var_declarator_list ::= 
-      let_var_declarator_list COMMA let_var_declarator 
-    | let_var_declarator 
-    ; 
- 
-let_var_declarator ::= 
-      IDENTIFIER:id ASSIGN expr 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    | IDENTIFIER:id 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    ; 
- 
-const_declarator_list ::= 
-      const_declarator_list COMMA const_declarator 
-    | const_declarator 
-    ; 
- 
-const_declarator ::= 
-      IDENTIFIER:id ASSIGN expr 
-      {:  
-         parser.action_obj.declareVariable((String)id); 
-         RESULT = id; 
-      :} 
-    | IDENTIFIER:id 
-      {:  
-         parser.action_obj.warn_const_not_initialized((String)id); 
-         parser.action_obj.declareVariable((String)id); 
-         RESULT = id; 
-      :} 
-    ; 
- 
-/* =========================== 
-   DECLARACIÓN DE FUNCIONES 
-   =========================== */ 
- 
-function_declaration ::= 
-      FUNCTION IDENTIFIER:id LPAREN RPAREN block_stmt 
-      {:  
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    | FUNCTION IDENTIFIER:id LPAREN parameter_list RPAREN block_stmt 
-      {:  
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    ; 
- 
-/* =========================== 
-   DECLARACIÓN DE CLASES 
-   =========================== */ 
- 
-class_declaration ::= 
-      CLASS IDENTIFIER:id class_body 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    | CLASS IDENTIFIER:id error 
-      {: 
-        parser.action_obj.report_error("Cuerpo de clase inválido en la declaración de 'class'", null, 
-idleft, idright); 
-      :} 
-    ; 
- 
-class_body ::= 
-      LBRACE class_element_list RBRACE 
-    | LBRACE RBRACE 
-    ; 
- 
-class_element_list ::= 
-      class_element_list class_element 
-    | class_element 
-    ; 
- 
-class_element ::= 
-      method_definition 
-    | constructor_definition 
-    | var_declaration 
-    | IDENTIFIER:id LPAREN:op error RPAREN block_stmt 
-      {: 
-        parser.action_obj.report_error("Parámetros inválidos en declaración de método", null, opleft, 
-opright); 
-      :} 
-    | IDENTIFIER:id LPAREN parameter_list RPAREN:op error 
-      {: 
-        parser.action_obj.report_error("Cuerpo de método inválido", null, opleft, opright); 
-      :} 
-    ; 
- 
-/* =========================== 
-   DEFINICIÓN DE MÉTODOS 
-   =========================== */ 
- 
-method_definition ::= 
-      IDENTIFIER:id LPAREN RPAREN block_stmt 
-    | IDENTIFIER:id LPAREN parameter_list RPAREN block_stmt 
-    | STATIC IDENTIFIER:id LPAREN RPAREN block_stmt 
-    | STATIC IDENTIFIER:id LPAREN parameter_list RPAREN block_stmt 
-    ; 
- 
-/* =========================== 
-   DEFINICIÓN DE CONSTRUCTOR 
-   =========================== */ 
- 
-constructor_definition ::= 
-      CONSTRUCTOR LPAREN RPAREN block_stmt 
-    | CONSTRUCTOR LPAREN parameter_list RPAREN block_stmt 
-    ; 
- 
-/* =========================== 
-   PARÁMETROS 
-   =========================== */ 
- 
-parameter_list ::= 
-      IDENTIFIER:id 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    | parameter_list COMMA IDENTIFIER:id 
-      {: 
-        parser.action_obj.declareVariable((String)id); 
-      :} 
-    ; 
- 
-assignment_expr ::= 
-      IDENTIFIER:id ASSIGN expr 
-      {: 
-        parser.action_obj.checkVariableUsage((String)id, idleft, idright); 
-      :} 
-    | postfix_expr DOT IDENTIFIER ASSIGN expr 
-    | expr 
-    ; 
- 
-/* =========================== 
-   EXPRESIONES 
-   =========================== */ 
- 
-expr ::= 
-    logical_or_expr 
-    ; 
- 
-logical_or_expr ::= 
-      logical_or_expr OR logical_and_expr 
-    | logical_and_expr 
-    | logical_or_expr:a OR:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida despues de '||'", null, 
-opleft, opright); 
-      :} 
-    | OR:a logical_or_expr:op 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida antes de '||'", null, aleft, 
-aright); 
-      :} 
-    ; 
- 
-logical_and_expr ::= 
-      logical_and_expr AND equality_expr 
-    | equality_expr 
-    | logical_and_expr:a AND:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida despues de '&&'", null, 
-opleft, opright); 
-      :} 
-    | AND:a logical_and_expr:op 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida antes de '&&'", null, aleft, 
-aright); 
-      :} 
-    ; 
- 
-equality_expr ::= 
-      equality_expr EQ relational_expr 
-    | equality_expr NE relational_expr 
-    | equality_expr STRICT_EQ relational_expr 
-    | equality_expr STRICT_NE relational_expr 
-    | relational_expr 
-    | equality_expr:a EQ:op error 
-      {: 
-        parser.action_obj.report_error("Operador '==' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | equality_expr:a NE:op error 
-      {: 
-        parser.action_obj.report_error("Operador '!=' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | equality_expr:a STRICT_EQ:op error 
-      {: 
-        parser.action_obj.report_error("Operador '===' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | equality_expr:a STRICT_NE:op error 
-      {: 
-        parser.action_obj.report_error("Operador '!==' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    ; 
- 
-relational_expr ::= 
-      relational_expr LT additive_expr 
-    | relational_expr LE additive_expr 
-    | relational_expr GT additive_expr 
-    | relational_expr GE additive_expr 
-    | additive_expr 
-    | relational_expr:a LT:op error 
-      {: 
-        parser.action_obj.report_error("Operador '<' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | relational_expr:a LE:op error 
-      {: 
-        parser.action_obj.report_error("Operador '<=' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | relational_expr:a GT:op error 
-      {: 
-        parser.action_obj.report_error("Operador '>' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    | relational_expr:a GE:op error 
-      {: 
-        parser.action_obj.report_error("Operador '>=' sin termino valido para comparacion", null, 
-opleft, opright); 
-      :} 
-    ; 
- 
-additive_expr ::= 
-      additive_expr PLUS multiplicative_expr 
-    | additive_expr MINUS multiplicative_expr 
-    | multiplicative_expr 
-    | additive_expr:a PLUS:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba un termino valido despues de '+' ", null, opleft, 
-opright); 
-      :} 
-    | additive_expr:a MINUS:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba un termino valido despues de '-' ", null, opleft, 
-opright); 
-      :} 
-    ; 
- 
-multiplicative_expr ::= 
-      multiplicative_expr MULT unary_expr 
-    | multiplicative_expr DIV unary_expr 
-    | unary_expr 
-    | multiplicative_expr:a MULT:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba un termino valido despues de '*' ", null, opleft, 
-opright); 
-      :} 
-    | multiplicative_expr:a DIV:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba un termino valido despues de '/' ", null, opleft, 
-opright); 
-      :} 
-    ; 
- 
-unary_expr ::= 
-      NOT unary_expr 
-    | MINUS unary_expr 
-    | PLUS unary_expr 
-    | TYPEOF unary_expr 
-    | postfix_expr 
-    | NOT:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida despues de '!' ", null, opleft, 
-opright); 
-      :} 
-    | TYPEOF:op error 
-      {: 
-        parser.action_obj.report_error("Se esperaba una expresion valida despues de 'typeof' ", null, 
-opleft, opright); 
-      :} 
+        parser.action_obj.report_error("Condicion invalida en la estructura 'if'", null, opleft, opright); 
+
+  :}
+
+  | IF LPAREN expr RPAREN:op error
+
+  {:
+
+	parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'if'", null, opleft, opright);
+
+  :}
+
+
+
+  /* Manejo de errores en WHILE */
+
+  | WHILE LPAREN:op error RPAREN matched_stmt
+
+  {:
+
+	parser.action_obj.report_error("Condicion inválida en la estructura 'while'", null, opleft, opright);
+
+  :}
+
+  | WHILE LPAREN expr RPAREN:op error
+
+  {:
+
+	parser.action_obj.report_error("Bloque de sentencias faltante en la estructura 'while'", null, opleft, opright);
+
+  :}
+
+
+
+  /* Manejo de errores en FOR */
+
+ | FOR LPAREN:op error SEMICOLON expr SEMICOLON assignment_expr RPAREN matched_stmt
+
+  {:
+
+	parser.action_obj.report_error("Inicialización inválida en la estructura 'for'", null, opleft, opright);
+
+  :}
+
+ | FOR LPAREN for_init SEMICOLON:op error SEMICOLON assignment_expr RPAREN matched_stmt
+
+  {:
+
+	parser.action_obj.report_error("Condicion inválida en la estructura 'for'", null, opleft, opright);
+
+  :}
+
+  | FOR LPAREN for_init SEMICOLON expr SEMICOLON:op error RPAREN matched_stmt
+
+  {:
+
+	parser.action_obj.report_error("Actualización inválida en la estructura 'for'", null, opleft, opright);
+
+  :}
+
+  ;
+
+
+
+unmatched_stmt ::=
+
+	IF LPAREN expr:e RPAREN stmt
+
+	{:
+
+	parser.action_obj.checkBooleanCondition(e, "if", eleft, eright);
+
+	:}
+
+  | IF LPAREN expr RPAREN matched_stmt ELSE unmatched_stmt
+
+  | WHILE LPAREN expr:e RPAREN unmatched_stmt
+
+	{:
+
+	parser.action_obj.checkBooleanCondition(e, "while", eleft, eright);
+
+	:}
+
+ | FOR LPAREN for_init SEMICOLON expr:e SEMICOLON assignment_expr RPAREN unmatched_stmt
+
+	{:
+
+	parser.action_obj.checkBooleanCondition(e, "for", eleft, eright);
+
+	:}
+
+  ;
+
+
+
+block_stmt ::=
+
+  LBRACE stmt_list RBRACE
+
+  ;
+
+
+
+declaration ::=
+
+    var_declaration
+
+  | function_declaration
+
+  | class_declaration
+
+  ;
+
+
+
+var_declaration ::=
+
+	VAR var_declarator_list SEMICOLON
+
+  | LET let_var_declarator_list SEMICOLON
+
+  | CONST const_declarator_list SEMICOLON
+
+  ;
+
+
+
+/* FOR LOOP INITIALIZATION - NO SEMICOLON */
+
+for_init ::=
+
+	VAR var_declarator_list
+
+  | LET let_var_declarator_list
+
+  | assignment_expr
+
+  | /* empty */
+
+  ;
+
+
+
+var_declarator_list ::=
+
+	var_declarator_list COMMA var_declarator
+
+  | var_declarator
+
+  ;
+
+
+
+var_declarator ::=
+
+	IDENTIFIER:id ASSIGN:o expr:tipo
+
+	{:
+        checkParenthesesBalance(oleft, oright);
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+	parser.action_obj.declareVariable((String)id, tipo, alcance, idleft, idright);
+
+	:}
+
+  | IDENTIFIER:id ASSIGN:e
+
+	{:
+        parser.action_obj.report_error("No se asignó valor a la variable '"+id+"'", null, eleft, eright);
+
+	:}
+
+  | IDENTIFIER:id
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, "undefined", alcance, idleft, idright);
+
+	:}
+
+  ;
+
+
+
+let_var_declarator_list ::=
+
+	let_var_declarator_list COMMA let_var_declarator
+
+  | let_var_declarator
+
+  ;
+
+
+
+let_var_declarator ::=
+
+	IDENTIFIER:id ASSIGN expr:tipo
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, tipo, alcance, idleft, idright);
+
+	:}
+
+  | IDENTIFIER:id
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, "undefined", alcance, idleft, idright);
+
+	:}
+
+  ;
+
+
+
+const_declarator_list ::=
+
+	const_declarator_list COMMA const_declarator
+
+  | const_declarator
+
+  ;
+
+
+
+const_declarator ::=
+
+	IDENTIFIER:id ASSIGN expr:tipo
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, tipo, alcance, idleft, idright, true, true);
+
+	RESULT = id;
+
+	:}
+
+  | IDENTIFIER:id
+
+	{:
+
+	parser.action_obj.warn_const_not_initialized((String)id);
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, "undefined", alcance, idleft, idright, true, false);
+
+	RESULT = id;
+
+	:}
+
+  ;
+
+
+
+parameter_list ::=
+
+	IDENTIFIER:id
+
+	{:
+
+	parser.action_obj.currentParamNames.add((String)id);
+
+	parser.action_obj.addFunctionParameter((String)id, "parameter");
+
+	parser.action_obj.currentParamCount = 1;
+
+	:}
+
+  | parameter_list COMMA IDENTIFIER:id
+
+	{:
+
+	parser.action_obj.currentParamNames.add((String)id);
+
+	parser.action_obj.addFunctionParameter((String)id, "parameter");
+
+	parser.action_obj.currentParamCount++;
+
+	:}
+
+  ;
+
+
+
+function_declaration ::=
+
+	FUNCTION IDENTIFIER:id LPAREN RPAREN function_scoped_block
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	java.util.List<String> emptyParams = new java.util.ArrayList<String>();
+
+	SymbolInfo funcInfo = new SymbolInfo("function", alcance, idleft, idright, 0, emptyParams, "unknown");
+
+	parser.action_obj.symbolTable.peek().put((String)id, funcInfo);
+
+	:}
+
+  | FUNCTION IDENTIFIER:id LPAREN parameter_list RPAREN function_scoped_block
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	SymbolInfo funcInfo = new SymbolInfo("function", alcance, idleft, idright,
+
+	parser.action_obj.currentParamCount,
+
+	parser.action_obj.currentFunctionParams,
+
+	"unknown");
+
+	parser.action_obj.symbolTable.peek().put((String)id, funcInfo);
+
+	parser.action_obj.currentParamCount = 0;
+
+	parser.action_obj.currentFunctionParams = new java.util.ArrayList<String>();
+
+	:}
+
+  ;
+
+function_scoped_block ::=
+
+  LBRACE
+
+  {:
+
+	parser.action_obj.enterScope();
+
+	parser.action_obj.currentFunctionName = "function";
+
+
+
+	// Declarar parámetros en el scope de la función
+
+	for (String paramName : parser.action_obj.currentParamNames) {
+
+	parser.action_obj.declareVariable(paramName, "parameter", "local", 0, 0);
+
+	}
+
+  :}
+
+  stmt_list
+
+  RBRACE
+
+  {:
+
+	parser.action_obj.exitScope();
+
+	parser.action_obj.currentFunctionName = null;
+
+	parser.action_obj.currentParamNames.clear();
+
+  :}
+
+  ;
+
+
+
+class_declaration ::=
+
+	CLASS IDENTIFIER:id class_body
+
+	{:
+
+	String alcance = (parser.action_obj.symbolTable.size() > 1) ? "local" : "global";
+
+	parser.action_obj.declareVariable((String)id, "class", alcance, idleft, idright);
+
+	:}
+
+  | CLASS IDENTIFIER:id error
+
+	{:
+
+	parser.action_obj.report_error("Cuerpo de clase inválido en la declaración de 'class'", null, idleft, idright);
+
+	:}
+
+  ;
+
+
+
+class_body ::=
+
+	LBRACE class_element_list RBRACE
+
+  | LBRACE RBRACE
+
+  ;
+
+
+
+class_element_list ::=
+
+	class_element_list class_element
+
+  | class_element
+
+  ;
+
+
+
+class_element ::=
+
+	method_definition
+
+  | constructor_definition
+
+  | var_declaration
+
+  | IDENTIFIER:id LPAREN:op error RPAREN block_stmt
+
+	{:
+
+	parser.action_obj.report_error("Parámetros inválidos en declaración de método", null, opleft, opright);
+
+	:}
+
+  | IDENTIFIER:id LPAREN parameter_list RPAREN:op error
+
+	{:
+
+	parser.action_obj.report_error("Cuerpo de método inválido", null, opleft, opright);
+
+	:}
+
+  ;
+
+
+
+/* SIMPLIFIED METHOD DEFINITION - Uses scoped_block */ method_definition ::=
+	IDENTIFIER:id LPAREN RPAREN scoped_block
+
+  | IDENTIFIER:id LPAREN parameter_list RPAREN scoped_block
+
+  | STATIC IDENTIFIER:id LPAREN RPAREN scoped_block
+
+  | STATIC IDENTIFIER:id LPAREN parameter_list RPAREN scoped_block
+
+  ;
+
+
+
+constructor_definition ::=
+
+	CONSTRUCTOR LPAREN RPAREN scoped_block
+
+  | CONSTRUCTOR LPAREN parameter_list RPAREN scoped_block
+
+  ;
+
+
+
+/* SCOPED BLOCK - Creates and manages its own scope */ scoped_block ::=
+  LBRACE
+
+  {: parser.action_obj.enterScope(); :}
+
+  stmt_list
+
+  RBRACE
+
+  {: parser.action_obj.exitScope(); :}
+
+  ;
+
+
+
+assignment_expr ::=
+
+	IDENTIFIER:id ASSIGN expr:tipo
+
+	{:
+
+	parser.action_obj.checkVariableUsage((String)id, idleft, idright);
+
+	parser.action_obj.checkTypeCompatibility((String)id, tipo, idleft, idright);
+
+	:}
+
+  | postfix_expr DOT IDENTIFIER ASSIGN expr
+
+  | expr
+
+  ;
+
+
+
+/* ======================= EXPRESIONES ======================= */
+
+expr ::=
+    logical_or_expr:e
+    {: RESULT = e; :}
+    ;
+
+/* ---------- OPERADOR || ---------- */
+logical_or_expr ::=
+    logical_or_expr:e1 OR:op logical_and_expr:e2
+    {:
+        parser.action_obj.checkLogicalOperation(e1, e2, "||", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | logical_and_expr:e
+    {:
+        RESULT = e;
+    :}
+  | logical_or_expr:a OR:op error
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida después de '||'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | OR:a logical_or_expr:op
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida antes de '||'", null, aleft, aright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- OPERADOR && ---------- */
+logical_and_expr ::=
+    logical_and_expr:e1 AND:op equality_expr:e2
+    {:
+        parser.action_obj.checkLogicalOperation(e1, e2, "&&", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | equality_expr:e
+    {:
+        RESULT = e;
+    :}
+  | logical_and_expr:a AND:op error
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida después de '&&'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | AND:a logical_and_expr:op
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida antes de '&&'", null, aleft, aright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- COMPARACIONES == != === !== ---------- */
+equality_expr ::=
+    equality_expr:e1 EQ:op relational_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "==", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | equality_expr:e1 NE:op relational_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "!=", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | equality_expr:e1 STRICT_EQ:op relational_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "===", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | equality_expr:e1 STRICT_NE:op relational_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "!==", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | relational_expr:e
+    {:
+        RESULT = e;
+    :}
+  /* Errores comunes */
+  | equality_expr:a EQ:op error
+    {:
+        parser.action_obj.report_error("Operador '==' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | equality_expr:a NE:op error
+    {:
+        parser.action_obj.report_error("Operador '!=' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | equality_expr:a STRICT_EQ:op error
+    {:
+        parser.action_obj.report_error("Operador '===' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | equality_expr:a STRICT_NE:op error
+    {:
+        parser.action_obj.report_error("Operador '!==' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- OPERADORES RELACIONALES < <= > >= ---------- */
+relational_expr ::=
+    relational_expr:e1 LT:op additive_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "<", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | relational_expr:e1 LE:op additive_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, "<=", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | relational_expr:e1 GT:op additive_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, ">", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | relational_expr:e1 GE:op additive_expr:e2
+    {:
+        parser.action_obj.checkComparisonTypes(e1, e2, ">=", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | additive_expr:e
+    {:
+        RESULT = e;
+    :}
+  /* Errores */
+  | relational_expr:a LT:op error
+    {:
+        parser.action_obj.report_error("Operador '<' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | relational_expr:a LE:op error
+    {:
+        parser.action_obj.report_error("Operador '<=' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | relational_expr:a GT:op error
+    {:
+        parser.action_obj.report_error("Operador '>' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | relational_expr:a GE:op error
+    {:
+        parser.action_obj.report_error("Operador '>=' sin término válido para comparación", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- SUMA Y RESTA ---------- */
+additive_expr ::=
+    additive_expr:e1 PLUS:op multiplicative_expr:e2
+    {:
+        parser.action_obj.checkArithmeticOperation(e1, e2, "+", opleft, opright);
+        if (e1.equals("string") || e2.equals("string")) {
+            RESULT = "string";
+        } else {
+            RESULT = "number";
+        }
+    :}
+  | additive_expr:e1 MINUS:op multiplicative_expr:e2
+    {:
+        parser.action_obj.checkArithmeticOperation(e1, e2, "-", opleft, opright);
+        RESULT = "number";
+    :}
+  | multiplicative_expr:e
+    {:
+        RESULT = e;
+    :}
+  /* Errores */
+  | additive_expr:a PLUS:op error
+    {:
+        parser.action_obj.report_error("Se esperaba un término válido después de '+'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | additive_expr:a MINUS:op error
+    {:
+        parser.action_obj.report_error("Se esperaba un término válido después de '-'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- MULTIPLICACIÓN Y DIVISIÓN ---------- */
+multiplicative_expr ::=
+    multiplicative_expr:e1 MULT:op unary_expr:e2
+    {:
+        parser.action_obj.checkArithmeticOperation(e1, e2, "*", opleft, opright);
+        RESULT = "number";
+    :}
+  /*| multiplicative_expr:e1 DIV:op unary_expr:e2
+    {:
+        parser.action_obj.checkArithmeticOperation(e1, e2, "/", opleft, opright);
+        //parser.action_obj.checkDivisionByZero(e2, opleft, opright);
+        System.out.println(e2);
+        RESULT = "number";
+    :}*/
+    | multiplicative_expr:e1 DIV:op NUMBER:n
+    {:
+        parser.action_obj.checkArithmeticOperation(e1, "number", "/", opleft, opright);
+        // Aquí n es el valor del token NUMBER
+        if (n != null && n.toString().equals("0")) {
+            parser.action_obj.checkDivisionByZero("0", opleft, opright);
+        }
+        RESULT = "number";
+    :}
+  | unary_expr:e
+    {:
+        RESULT = e;
+    :}
+  /* Errores */
+  | multiplicative_expr:a MULT:op error
+    {:
+        parser.action_obj.report_error("Se esperaba un término válido después de '*'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | multiplicative_expr:a DIV:op error
+    {:
+        parser.action_obj.report_error("Se esperaba un término válido después de '/'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+    ;
+
+/* ---------- OPERADORES UNARIOS ---------- */
+unary_expr ::=
+    NOT:op unary_expr:e
+    {:
+        parser.action_obj.checkLogicalOperation(e, e, "!", opleft, opright);
+        RESULT = "boolean";
+    :}
+  | MINUS unary_expr:e
+    {:
+        parser.action_obj.checkArithmeticOperation(e, e, "-", eleft, eright);
+        RESULT = "number";
+    :}
+  | PLUS unary_expr:e
+    {:
+        parser.action_obj.checkArithmeticOperation(e, e, "+", eleft, eright);
+        RESULT = "number";
+    :}
+  | TYPEOF unary_expr:e
+    {:
+        RESULT = "string";
+    :}
+  | postfix_expr:e
+    {:
+        RESULT = e;
+    :}
+  /* Errores */
+  | NOT:op error
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida después de '!'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
+  | TYPEOF:op error
+    {:
+        parser.action_obj.report_error("Se esperaba una expresión válida después de 'typeof'", null, opleft, opright);
+        RESULT = "unknown";
+    :}
     ; 
  
 postfix_expr ::= 
-      primary_expr 
-    | postfix_expr DOT IDENTIFIER 
-    | postfix_expr LBRACKET expr RBRACKET 
-    | postfix_expr LPAREN RPAREN 
-    | postfix_expr LPAREN argument_list RPAREN 
-    ; 
- 
-argument_list ::= 
-      expr 
-    | argument_list COMMA expr 
-    ; 
- 
+      primary_expr:e 
+      {: 
+        RESULT = e; 
+      :} 
+    | postfix_expr:e DOT IDENTIFIER:id
+      {: 
+        // Para accesos a propiedades/métodos (ej: console.log, Math.floor)
+        RESULT = e + "." + id;
+      :} 
+    | postfix_expr:e LBRACKET expr RBRACKET 
+      {: 
+        RESULT = "unknown"; 
+      :} 
+
+  /* ===== LLAMADAS A FUNCIONES SIMPLES (identificador directo) ===== */
+  
+  // Función simple sin argumentos: miFunc()
+  | IDENTIFIER:funcName LPAREN RPAREN
+	{:
+	parser.action_obj.validateFunctionCall((String)funcName, 0, funcNameleft, funcNameright);
+	SymbolInfo info = parser.action_obj.getSymbolInfo((String)funcName);
+	RESULT = (info != null && info.tipoRetorno != null) ? info.tipoRetorno : "unknown";
+	:}
+
+  // Función simple con argumentos: miFunc(x, y)
+  | IDENTIFIER:funcName LPAREN argument_list:args RPAREN
+	{:
+	parser.action_obj.validateFunctionCall((String)funcName, (Integer)args, funcNameleft, funcNameright);
+	SymbolInfo info = parser.action_obj.getSymbolInfo((String)funcName);
+	RESULT = (info != null && info.tipoRetorno != null) ? info.tipoRetorno : "unknown";
+	:}
+
+  /* ===== LLAMADAS A MÉTODOS (obj.metodo) ===== */
+  
+  // Método sin argumentos: console.log(), Math.floor()
+  | postfix_expr:obj DOT IDENTIFIER:method LPAREN RPAREN
+	{:
+	String fullName = obj + "." + method;
+	parser.action_obj.validateFunctionCall(fullName, 0, methodleft, methodright);
+	SymbolInfo info = parser.action_obj.getSymbolInfo(fullName);
+	RESULT = (info != null && info.tipoRetorno != null) ? info.tipoRetorno : "unknown";
+	:}
+
+  // Método con argumentos: console.log(x), Math.pow(2, 3)
+  | postfix_expr:obj DOT IDENTIFIER:method LPAREN argument_list:args RPAREN
+	{:
+	String fullName = obj + "." + method;
+	parser.action_obj.validateFunctionCall(fullName, (Integer)args, methodleft, methodright);
+	SymbolInfo info = parser.action_obj.getSymbolInfo(fullName);
+	RESULT = (info != null && info.tipoRetorno != null) ? info.tipoRetorno : "unknown";
+	:}
+  ; 
 primary_expr ::=  
-      IDENTIFIER 
+    IDENTIFIER:id 
+      {: 
+        SymbolInfo info = parser.action_obj.getSymbolInfo((String)id); 
+         
+        if (info == null) { 
+            parser.action_obj.report_error("Variable '" + id + "' no está declarada",  
+                                          null, idleft, idright); 
+            RESULT = "unknown"; 
+        } else { 
+            // CAMBIO: Retornar el tipo en lugar del nombre, 
+            // excepto si es una función (para las llamadas)
+            if (info.tipo.equals("function")) {
+                RESULT = (String)id; // Para permitir validateFunctionCall
+            } else {
+                RESULT = info.tipo; // Retornar el tipo de la variable
+            }
+        } 
+      :} 
     | NUMBER 
+      {: 
+        RESULT = "number"; 
+      :} 
     | STRING_LITERAL 
+      {: 
+        RESULT = "string"; 
+      :} 
     | BOOLEAN_LITERAL 
+      {: 
+        RESULT = "boolean"; 
+      :} 
     | NULL_LITERAL 
+      {: 
+        RESULT = "null"; 
+      :} 
     | BIGINT 
-    | LPAREN expr RPAREN 
+      {: 
+        RESULT = "bigint"; 
+      :} 
+    | LPAREN expr:e RPAREN 
+      {: 
+        RESULT = e; 
+      :} 
     | THIS 
+      {: 
+        RESULT = "object"; 
+      :} 
     | LPAREN:a expr:op error 
       {: 
-        parser.action_obj.report_error("Parentesis sin cerrar: se esperaba ')'", null, opleft, opright); 
+        //parser.action_obj.report_error("Parentesis sin cerrar: se esperaba ')'", null, opleft, opright); 
         parser.action_obj.incrementOpenParen(); 
+        RESULT = "unknown"; 
       :} 
     | LPAREN:a error RPAREN:op 
       {: 
         parser.action_obj.report_error("Expresion invalida entre parentesis", null, aleft, aright); 
-      :} 
-    | LPAREN:a RPAREN:op 
-       {: 
-        parser.action_obj.report_error("Falta expresion entre parentesis", null, aleft, aright); 
-      :} 
-    ; 
- 
-comments ::= 
-COMMENT_LINE 
-| COMMENT_BLOCK 
-;
+        RESULT = "unknown"; 
+      :}
+
+  | LPAREN:a RPAREN:op
+
+	{:
+
+	parser.action_obj.report_error("Falta expresion entre parentesis", null, aleft, aright);
+
+	RESULT = "unknown";
+
+	:}
+
+  ;
+

@@ -159,7 +159,7 @@ COMMENT_BLOCK   = "/*"([^*]|\*+[^*/])*\*+"/"
    =========================== */
 
 {IDENTIFIER} {
-    System.out.println("Linea:"+(yyline+1)+", Columna:"+(yycolumn+1)+" -> IDENTIFIER: " + yytext());
+    /*System.out.println("Linea:"+(yyline+1)+", Columna:"+(yycolumn+1)+" -> IDENTIFIER: " + yytext());*/
     return symbol(IDENTIFIER, yytext());
 }
 
